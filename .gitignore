@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+.env
+_env
+files.zip
+files/rag_faiss_store/
