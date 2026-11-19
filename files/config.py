@@ -32,7 +32,7 @@ def _get_api_key() -> str | None:
 
 
 GEMINI_API_KEY = _get_api_key()
-CHAT_MODEL = os.getenv("GEMINI_CHAT_MODEL", "the-model-id-you-picked")
+CHAT_MODEL = os.getenv("GEMINI_CHAT_MODEL", "gemini-3.5-flash-lite")
 EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
 MAX_OUTPUT_TOKENS = int(os.getenv("GEMINI_MAX_OUTPUT_TOKENS", "700"))  # raise for longer answers
 
@@ -55,9 +55,12 @@ def _make_llm(model_name):
     )
 
 def get_llm():
-    primary = _make_llm(CHAT_MODEL)
-    fallbacks = [_make_llm(m) for m in FALLBACK_MODELS]
-    return primary.with_fallbacks(fallbacks) if fallbacks else primary
+    return ChatGoogleGenerativeAI(
+        model=CHAT_MODEL,
+        google_api_key=GEMINI_API_KEY,
+        temperature=0,
+        max_output_tokens=MAX_OUTPUT_TOKENS,
+    )
     
 def chunk_text(content) -> str:
     """Turn a model chunk or message content (string or list of blocks) into plain text."""
