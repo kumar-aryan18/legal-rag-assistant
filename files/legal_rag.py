@@ -17,7 +17,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 import config
-from config import INDEX_DIR, TOP_K, get_embeddings, get_llm
+from config import INDEX_DIR, TOP_K, chunk_text, get_embeddings, get_llm
 
 try:  # optional dependency: pip install rank-bm25
     from rank_bm25 import BM25Okapi
@@ -211,7 +211,7 @@ class LegalRAG:
             return {"answer": NOT_FOUND_MESSAGE, "sources": [], "chunks": []}
         response = self.chain.invoke(inputs)
         return {
-            "answer": response.content,
+            "answer": chunk_text(response),   # CHANGED: Gemini may return a list of blocks
             "sources": self.collect_sources(docs),
             "chunks": docs,
         }
@@ -228,7 +228,8 @@ class LegalRAG:
 
         def tokens():
             for chunk in self.chain.stream(inputs):
-                if chunk.content:
-                    yield chunk.content
+                text = chunk_text(chunk)      # CHANGED: flatten list-style chunks to plain text
+                if text:
+                    yield text
 
         return docs, tokens()

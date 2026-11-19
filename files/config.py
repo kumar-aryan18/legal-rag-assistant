@@ -32,7 +32,7 @@ def _get_api_key() -> str | None:
 
 
 GEMINI_API_KEY = _get_api_key()
-CHAT_MODEL = os.getenv("GEMINI_CHAT_MODEL", "gemini-2.5-flash")
+CHAT_MODEL = os.getenv("GEMINI_CHAT_MODEL", "gemini-3.8-flash")
 EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
 MAX_OUTPUT_TOKENS = int(os.getenv("GEMINI_MAX_OUTPUT_TOKENS", "700"))  # raise for longer answers
 
@@ -52,3 +52,18 @@ def get_llm():
         max_output_tokens=MAX_OUTPUT_TOKENS,
         thinking_budget=0,  # no hidden "thinking" tokens eating into the answer length
     )
+    
+def chunk_text(content) -> str:
+    """Turn a model chunk or message content (string or list of blocks) into plain text."""
+    content = getattr(content, "content", content)  # accept a message object too
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for part in content:
+            if isinstance(part, str):
+                parts.append(part)
+            elif isinstance(part, dict) and part.get("type") == "text":
+                parts.append(part.get("text", ""))
+        return "".join(parts)
+    return ""

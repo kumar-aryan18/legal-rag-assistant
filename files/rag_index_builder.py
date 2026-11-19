@@ -5,6 +5,7 @@ Usage:
     python rag_index_builder.py path/to/file.pdf  # index one file
 """
 import sys
+import time
 from pathlib import Path
 
 import pymupdf
@@ -15,6 +16,10 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from config import CHUNK_OVERLAP, CHUNK_SIZE, DOCS_DIR, INDEX_DIR, get_embeddings
 from overview import save_overviews  # NEW
 from pdf_tables import assemble_page_text  # NEW
+
+# Gemini free tier allows ~100 embedding requests per minute.
+BATCH_SIZE = 80
+PAUSE_SECONDS = 62
 
 
 def load_pdf_pages(pdf_path: Path) -> list[Document]:
@@ -48,6 +53,37 @@ def split_documents(pages: list[Document]) -> list[Document]:
     return splitter.split_documents(pages)
 
 
+def _is_rate_limit(error: Exception) -> bool:
+    text = str(error)
+    return "429" in text or "RESOURCE_EXHAUSTED" in text
+
+
+def build_store_throttled(chunks: list[Document], embeddings) -> FAISS:
+    """Embed in small batches so the free-tier per-minute limit is not exceeded."""
+    store = None
+    total = len(chunks)
+    for start in range(0, total, BATCH_SIZE):
+        batch = chunks[start:start + BATCH_SIZE]
+        for attempt in range(6):
+            try:
+                if store is None:
+                    store = FAISS.from_documents(batch, embeddings)
+                else:
+                    store.add_documents(batch)
+                break
+            except Exception as e:
+                if _is_rate_limit(e) and attempt < 5:
+                    print("  Rate limited, waiting 65 seconds ...")
+                    time.sleep(65)
+                else:
+                    raise
+        done = min(start + BATCH_SIZE, total)
+        print(f"  Embedded {done}/{total} chunks")
+        if done < total:
+            time.sleep(PAUSE_SECONDS)
+    return store
+
+
 def build_index(pdf_paths: list[Path], persist_dir: Path = INDEX_DIR) -> int:
     pages: list[Document] = []
     for pdf_path in pdf_paths:
@@ -64,7 +100,7 @@ def build_index(pdf_paths: list[Path], persist_dir: Path = INDEX_DIR) -> int:
     chunks = split_documents(pages)
     print(f"Created {len(chunks)} chunks from {len(pages)} pages. Embedding ...")
 
-    store = FAISS.from_documents(chunks, get_embeddings())
+    store = build_store_throttled(chunks, get_embeddings())
     store.save_local(str(persist_dir))
     print(f"Index saved to {persist_dir}")
     return len(chunks)

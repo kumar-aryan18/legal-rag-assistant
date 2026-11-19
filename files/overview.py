@@ -9,7 +9,7 @@ import json
 import re
 from pathlib import Path
 
-from config import INDEX_DIR, get_llm
+from config import INDEX_DIR, chunk_text, get_llm
 
 FILE_NAME = "overview.json"
 HEADING_RE = re.compile(r"^(\d{1,2}(?:\.\d{1,2}){0,2})\.?\s+([A-Z][^\n]{2,90})$")
@@ -132,8 +132,9 @@ def stream_overview(name: str, directory=INDEX_DIR):
     )
     parts = []
     for chunk in get_llm().stream(prompt):
-        if chunk.content:
-            parts.append(chunk.content)
-            yield chunk.content
+        text = chunk_text(chunk)   # Gemini may stream a list of blocks; flatten to text
+        if text:
+            parts.append(text)
+            yield text
     info["summary"] = "".join(parts).strip()
     _path(directory).write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
