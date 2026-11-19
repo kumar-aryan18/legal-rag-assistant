@@ -97,12 +97,11 @@ if question:
         st.markdown(question)
 
     # Rebuild (user, assistant) pairs from earlier turns for follow-up context.
-    msgs = st.session_state.messages[:-1]
-    history = [
-        (msgs[i]["content"], msgs[i + 1]["content"])
-        for i in range(0, len(msgs) - 1, 2)
-    ]
-
+    msg = str(e)
+    if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
+        st.error("The free Gemini quota for today is used up. Please try again later.")
+    else:
+        st.error(f"Could not generate an answer ({type(e).__name__}): {e}")
     with st.chat_message("assistant"):
         sources, chunks, warning, label = [], [], None, None
         chosen = router.route(question, settings["sources"])
