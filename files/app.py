@@ -124,10 +124,8 @@ if question:
                     st.markdown(answer)
         except Exception as e:
             st.session_state.messages.pop()  # keep user/assistant turns paired
-            st.error(
-                f"Could not generate an answer: {e}. "
-                "Check that GEMINI_API_KEY is set correctly, or wait a minute if you hit the free-tier rate limit."
-            )
+            st.error(f"Could not generate an answer ({type(e).__name__}): {e!r}")
+            st.exception(e)
             st.stop()
 
         if chosen.kind == "rag":
