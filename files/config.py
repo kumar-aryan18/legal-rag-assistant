@@ -1,14 +1,13 @@
-"""Shared configuration for the Legal RAG Assistant (local Ollama + FAISS)."""
+"""Shared configuration for the Legal RAG Assistant (Gemini + FAISS)."""
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from langchain_ollama import ChatOllama, OllamaEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 
 BASE_DIR = Path(__file__).parent
 
-# Optional: loads ".env" and "_env" if present. Everything has a default,
-# so no key or account is needed.
+# Loads ".env" and "_env" if present (local development).
 load_dotenv(BASE_DIR / ".env")
 load_dotenv(BASE_DIR / "_env")
 
@@ -19,23 +18,37 @@ CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 150
 TOP_K = 4
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-CHAT_MODEL = os.getenv("OLLAMA_CHAT_MODEL", "llama3.1:8b")
-EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
-# Ollama's default context window is small; retrieved passages need more room.
-NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "4096"))
+
+def _get_api_key() -> str | None:
+    """Read the key from env/.env locally, or from Streamlit secrets when deployed."""
+    key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if key:
+        return key
+    try:
+        import streamlit as st
+        return st.secrets.get("GEMINI_API_KEY")
+    except Exception:
+        return None
 
 
-def get_embeddings() -> OllamaEmbeddings:
-    return OllamaEmbeddings(model=EMBEDDING_MODEL, base_url=OLLAMA_BASE_URL)
+GEMINI_API_KEY = _get_api_key()
+CHAT_MODEL = os.getenv("GEMINI_CHAT_MODEL", "gemini-2.5-flash")
+EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
+MAX_OUTPUT_TOKENS = int(os.getenv("GEMINI_MAX_OUTPUT_TOKENS", "700"))  # raise for longer answers
+
+
+def get_embeddings() -> GoogleGenerativeAIEmbeddings:
+    return GoogleGenerativeAIEmbeddings(
+        model=EMBEDDING_MODEL,
+        google_api_key=GEMINI_API_KEY,
+    )
 
 
 def get_llm():
-    return ChatOllama(
+    return ChatGoogleGenerativeAI(
         model=CHAT_MODEL,
-        base_url=OLLAMA_BASE_URL,
-        num_ctx=NUM_CTX,
+        google_api_key=GEMINI_API_KEY,
         temperature=0,
-        keep_alive="30m",   # keep the model loaded between questions
-        num_predict=400,    # cap answer length
+        max_output_tokens=MAX_OUTPUT_TOKENS,
+        thinking_budget=0,  # no hidden "thinking" tokens eating into the answer length
     )

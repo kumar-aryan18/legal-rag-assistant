@@ -13,6 +13,8 @@ from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from config import CHUNK_OVERLAP, CHUNK_SIZE, DOCS_DIR, INDEX_DIR, get_embeddings
+from overview import save_overviews  # NEW
+from pdf_tables import assemble_page_text  # NEW
 
 
 def load_pdf_pages(pdf_path: Path) -> list[Document]:
@@ -21,6 +23,12 @@ def load_pdf_pages(pdf_path: Path) -> list[Document]:
     with pymupdf.open(pdf_path) as pdf:
         for number, page in enumerate(pdf, start=1):
             text = page.get_text().strip()
+            try:  # NEW: keep table rows together ("Offence: Murder | IPC section: 302 | ...")
+                tables = [(t.bbox, t.extract()) for t in page.find_tables().tables]
+                if tables:
+                    text = assemble_page_text(page.get_text("blocks"), tables).strip() or text
+            except Exception:
+                pass  # older PyMuPDF without find_tables(): keep the plain text
             if text:
                 pages.append(
                     Document(
@@ -50,6 +58,8 @@ def build_index(pdf_paths: list[Path], persist_dir: Path = INDEX_DIR) -> int:
         raise RuntimeError(
             "No extractable text found. Scanned PDFs need OCR before indexing."
         )
+
+    save_overviews(pages, persist_dir)  # NEW: per-document outlines for the overview tool
 
     chunks = split_documents(pages)
     print(f"Created {len(chunks)} chunks from {len(pages)} pages. Embedding ...")
